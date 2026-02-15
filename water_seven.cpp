@@ -8,41 +8,73 @@
 //Task 0
 bool readInput(
     const string &filename,
-    char character[FIXED_CHARACTER][MAX_NAME], int hp[FIXED_CHARACTER], 
-    int skill[FIXED_CHARACTER], int &shipHP, int &repairCost){
-        ifstream fin(filename);
+    char character[FIXED_CHARACTER][MAX_NAME],
+    int hp[FIXED_CHARACTER],
+    int skill[FIXED_CHARACTER],
+    int &shipHP,
+    int &repairCost)
+{
+    ifstream fin(filename);
     if (!fin.is_open()) return false;
 
-    string line;
+    string name;
+    int a, b;
     int idx = 0;
 
-    while (getline(fin, line))
+    while (fin >> name >> a >> b)
     {
-        if (line == "") continue;  
+        string cleanName = "";
+        for (char c : name)
+            if (c != '_') cleanName += c;
+        name = cleanName;
 
-        string name;
-        int a, b;
-        stringstream ss(line);
-        ss >> name >> a >> b;
+        // clamp lower bound
+        if (a < 0) a = 0;
+        if (b < 0) b = 0;
 
-        if (name == "GOING_MERRY")  
+        if (name == "GOING_MERRY")
         {
+            if (a > 1000) a = 1000;
+            if (b > 3000) b = 3000;
+
             shipHP = a;
             repairCost = b;
         }
-        else   // dòng nhân vật
+        else
         {
-            strcpy(character[idx], name.c_str());
-            hp[idx] = a;
-            skill[idx] = b;
-            idx++;
+            if (a > 1000) a = 1000;
+            if (b > 100) b = 100;
+
+            int pos = -1;
+            for (int i = 0; i < idx; i++)
+            {
+                if (strcmp(character[i], name.c_str()) == 0)
+                {
+                    pos = i;
+                    break;
+                }
+            }
+
+            if (pos != -1)
+            {
+                hp[pos] = a;
+                skill[pos] = b;
+            }
+            else
+            {
+                if (idx >= FIXED_CHARACTER) return false;
+
+                strcpy(character[idx], name.c_str());
+                hp[idx] = a;
+                skill[idx] = b;
+                idx++;
+            }
         }
     }
 
     fin.close();
     return true;
 }
-
 
 
 // Task 1
@@ -69,8 +101,11 @@ int sum_digits(int n){
 }
 int damageEvaluation(int shipHP, int repairCost){
     if (shipHP < 455 && perfect_number(sum_digits(shipHP))) {
-        repairCost = (int)round(repairCost * 1.5);
+        repairCost = (repairCost * 3 + 1) / 2;
     }
+     if (repairCost > 3000) repairCost = 3000;
+    if (repairCost < 0) repairCost = 0;
+
     return repairCost;
 }
 
@@ -94,7 +129,7 @@ int conflictSimulation(
 int eventCount = 0;
 
 while (conflictIndex < 255 && eventCount < 10) {
-    int id = conflictIndex % 6;
+    int id = (conflictIndex % 6 + 6) % 6;
 
     if (id == 0) conflictIndex += 255;
     else if (id == 1) conflictIndex += 20;
@@ -112,12 +147,9 @@ while (conflictIndex < 255 && eventCount < 10) {
 void resolveDuel(
     char character[FIXED_CHARACTER][MAX_NAME], int hp[FIXED_CHARACTER], int skill[FIXED_CHARACTER],
     int conflictIndex, int repairCost, char duel[FIXED_CHARACTER][MAX_NAME]){
-        // Initialize output to empty strings
     for (int i = 0; i < FIXED_CHARACTER; ++i) {
         duel[i][0] = '\0';
     }
-
-    // Find indices of LUFFY and USOPP
     int idxL = -1, idxU = -1;
     for (int i = 0; i < FIXED_CHARACTER; ++i) {
         if (strcmp(character[i], "LUFFY") == 0) idxL = i;
@@ -125,27 +157,23 @@ void resolveDuel(
     }
 
     if (idxL == -1 || idxU == -1) {
-        // Required characters not found; leave duel empty
         return;
     }
 
-    // Compute U as integer expression per specification
     int U = skill[idxU] + (conflictIndex / 20) + (repairCost / 500);
 
-    // If Luffy already strong enough, no helpers needed
     if (skill[idxL] >= U) {
         return;
     }
 
-    // Build list of member indices excluding Luffy and Usopp
     int members[FIXED_CHARACTER];
     int m = 0;
     for (int i = 0; i < FIXED_CHARACTER; ++i) {
+        if (character[i][0] == '\0') continue;
         if (i == idxL || i == idxU) continue;
-        members[m++] = i;
-    }
+    members[m++] = i;
+}
 
-    // Precompute supports and costs for these members
     int support[FIXED_CHARACTER];
     int cost[FIXED_CHARACTER];
     for (int i = 0; i < m; ++i) {
@@ -154,7 +182,6 @@ void resolveDuel(
         cost[i] = (hp[idx] % 10) + 1;
     }
 
-    // Brute force all subsets of the m members (m should be 5)
     int bestMask = 0;
     int bestCost = INT_MAX;
     int bestCount = INT_MAX;
@@ -180,16 +207,13 @@ void resolveDuel(
     }
 
     if (bestCost == INT_MAX) {
-        // No feasible subset found; leave duel empty
         return;
     }
 
-    // Populate duel array with selected members' names in original order
     int out = 0;
     for (int b = 0; b < m; ++b) {
         if (bestMask & (1 << b)) {
             int idx = members[b];
-            // copy name
             strcpy(duel[out], character[idx]);
             ++out;
         }
@@ -201,7 +225,8 @@ void decodeCP9Message(char character[FIXED_CHARACTER][MAX_NAME],
     int hp[FIXED_CHARACTER], int skill[FIXED_CHARACTER], int conflictIndex, 
     int repairCost, char cipherText[], char resultText[])
 {
-    // ===== 1. Tách message và checksum =====
+    resultText[0] = '\0';
+
     char message[1000];
     int msgLen = 0;
     int i = 0;
@@ -211,27 +236,30 @@ void decodeCP9Message(char character[FIXED_CHARACTER][MAX_NAME],
     }
     message[msgLen] = '\0';
 
-    if (cipherText[i] != '#') {
-        resultText[0] = '\0';
-        return;
-    }
+    if (cipherText[i] != '#') return;
 
-    int checksumInput = (cipherText[i + 1] - '0') * 10 + (cipherText[i + 2] - '0');
+    if (cipherText[i+1] == '\0' || cipherText[i+2] == '\0') return;
 
-    // ===== 2. Kiểm tra checksum =====
+    if (cipherText[i+1] < '0' || cipherText[i+1] > '9') return;
+    if (cipherText[i+2] < '0' || cipherText[i+2] > '9') return;
+
+    int checksumInput = (cipherText[i+1] - '0') * 10 
+                      + (cipherText[i+2] - '0');
+
     int checksum = 0;
     for (int j = 0; j < msgLen; j++) {
         checksum += (int)message[j];
     }
     checksum %= 100;
 
-    if (checksum != checksumInput) {
+    if (checksum != checksumInput){
         resultText[0] = '\0';
         return;
-    }
+    } 
 
-    // ===== 3. Đảo theo block =====
     int key = (conflictIndex + repairCost) % 26;
+    if (key < 0) key += 26;
+
     int B = (key % 5) + 4;
 
     char reversed[1000];
@@ -247,7 +275,6 @@ void decodeCP9Message(char character[FIXED_CHARACTER][MAX_NAME],
     }
     reversed[pos] = '\0';
 
-    // ===== 4. Giải mã dịch vòng =====
     int digitShift = key % 10;
 
     for (int j = 0; reversed[j] != '\0'; j++) {
@@ -270,29 +297,30 @@ void decodeCP9Message(char character[FIXED_CHARACTER][MAX_NAME],
     }
     resultText[pos] = '\0';
 
-    // ===== 5. Kiểm tra hợp lệ =====
     bool valid = false;
 
-    for (int j = 0; resultText[j] != '\0'; j++) {
-        if (resultText[j] == 'C' && resultText[j + 1] == 'P' && resultText[j + 2] == '9') {
+  for (int j = 0; j + 2 < pos; j++) {
+    if (resultText[j] == 'C' &&
+        resultText[j+1] == 'P' &&
+        resultText[j+2] == '9') {
+        valid = true;
+        break;
+    }
+}
+
+    char keyStr[] = "ENIESLOBBY";
+for (int j = 0; j + 9 < pos; j++) {
+        int k = 0;
+        while (keyStr[k] != '\0' &&
+               resultText[j+k] == keyStr[k]) {
+            k++;
+        }
+        if (keyStr[k] == '\0') {
             valid = true;
             break;
         }
     }
 
-    for (int j = 0; resultText[j] != '\0'; j++) {
-        if (resultText[j] == 'E') {
-            int k = 0;
-            char keyStr[] = "ENIESLOBBY";
-            while (keyStr[k] != '\0' && resultText[j + k] == keyStr[k]) k++;
-            if (keyStr[k] == '\0') {
-                valid = true;
-                break;
-            }
-        }
-    }
-
-    // ===== 6. Gắn TRUE / FALSE =====
     int len = 0;
     while (resultText[len] != '\0') len++;
 
@@ -313,6 +341,7 @@ void decodeCP9Message(char character[FIXED_CHARACTER][MAX_NAME],
     resultText[len] = '\0';
 }
 
+
 // Task 5
 int analyzeDangerLimit(int grid[MAX_GRID][MAX_GRID], int rows, int cols)
 {
@@ -323,7 +352,7 @@ int analyzeDangerLimit(int grid[MAX_GRID][MAX_GRID], int rows, int cols)
         int rowSum = 0;
         for (int j = 0; j < cols; ++j) {
             int v = grid[i][j];
-            if (v >= 0) rowSum += v; // ignore -1 cells
+            if (v >= 0) rowSum += v;
             if (v > maxCell) maxCell = v;
         }
         if (rowSum > maxRowSum) maxRowSum = rowSum;
